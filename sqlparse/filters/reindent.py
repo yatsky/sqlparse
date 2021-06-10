@@ -86,6 +86,7 @@ class ReindentFilter:
 
         return tidx, token
 
+    @pysnooper.snoop()
     def _split_kwds(self, tlist):
         tidx, token = self._next_token(tlist)
         while token:
@@ -116,6 +117,7 @@ class ReindentFilter:
                 tidx += 1
             tidx, token = tlist.token_next_by(t=ttypes, idx=tidx)
 
+    @pysnooper.snoop()
     def _process(self, tlist):
         func_name = '_process_{cls}'.format(cls=type(tlist).__name__)
         func = getattr(self, func_name.lower(), self._process_default)
@@ -130,7 +132,6 @@ class ReindentFilter:
         with indent(self):
             self._process_default(tlist)
 
-    @pysnooper.snoop()
     def _process_parenthesis(self, tlist):
         ttypes = T.Keyword.DML, T.Keyword.DDL
         _, is_dml_dll = tlist.token_next_by(t=ttypes)
@@ -140,6 +141,8 @@ class ReindentFilter:
 
         with indent(self, 1 if is_dml_dll else 0):
             tlist.tokens.insert(0, self.nl()) if is_dml_dll else None
+            # 0 is whitespace, 1 is parenthsis itself, 2 is the DDL token
+            tlist.tokens.insert(2, self.nl(self.width)) if is_dml_dll else None
             with offset(self, self._get_offset(first) + 1):
                 self._process_default(tlist, not is_dml_dll)
 
@@ -147,13 +150,18 @@ class ReindentFilter:
         self._last_func = tlist[0]
         self._process_default(tlist)
 
+    def _process_identifier(self, token):
+        print(type(token))
+
+    @pysnooper.snoop()
     def _process_identifierlist(self, tlist):
+        print(type(tlist))
         identifiers = list(tlist.get_identifiers())
         if self.indent_columns:
             first = next(identifiers[0].flatten())
             num_offset = 1 if self.char == '\t' else self.width
         else:
-            first = next(identifiers.pop(0).flatten())
+            first = next(identifiers[0].flatten())
             num_offset = 1 if self.char == '\t' else self._get_offset(first)
 
         if not tlist.within(sql.Function) and not tlist.within(sql.Values):
@@ -168,6 +176,7 @@ class ReindentFilter:
                             adjust = -2
                             _, comma = tlist.token_prev(tlist.token_index(token))
                             if comma is None:
+                                tlist.insert_before(token, self.nl(offset=adjust + 2))
                                 continue
                             token = comma
                         tlist.insert_before(token, self.nl(offset=adjust))
@@ -249,6 +258,7 @@ class ReindentFilter:
         for sgroup in tlist.get_sublists():
             self._process(sgroup)
 
+    @pysnooper.snoop()
     def process(self, stmt):
         self._curr_stmt = stmt
         self._process(stmt)

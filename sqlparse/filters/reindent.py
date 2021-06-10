@@ -7,12 +7,20 @@
 
 from sqlparse import sql, tokens as T
 from sqlparse.utils import offset, indent
+import pysnooper
 
 
 class ReindentFilter:
-    def __init__(self, width=2, char=' ', wrap_after=0, n='\n',
-                 comma_first=False, indent_after_first=False,
-                 indent_columns=False):
+    def __init__(
+        self,
+        width=2,
+        char=' ',
+        wrap_after=0,
+        n='\n',
+        comma_first=False,
+        indent_after_first=False,
+        indent_columns=False,
+    ):
         self.n = n
         self.width = width
         self.char = char
@@ -47,13 +55,26 @@ class ReindentFilter:
 
     def nl(self, offset=0):
         return sql.Token(
-            T.Whitespace,
-            self.n + self.char * max(0, self.leading_ws + offset))
+            T.Whitespace, self.n + self.char * max(0, self.leading_ws + offset)
+        )
 
     def _next_token(self, tlist, idx=-1):
-        split_words = ('FROM', 'STRAIGHT_JOIN$', 'JOIN$', 'AND', 'OR',
-                       'GROUP BY', 'ORDER BY', 'UNION', 'VALUES',
-                       'SET', 'BETWEEN', 'EXCEPT', 'HAVING', 'LIMIT')
+        split_words = (
+            'FROM',
+            'STRAIGHT_JOIN$',
+            'JOIN$',
+            'AND',
+            'OR',
+            'GROUP BY',
+            'ORDER BY',
+            'UNION',
+            'VALUES',
+            'SET',
+            'BETWEEN',
+            'EXCEPT',
+            'HAVING',
+            'LIMIT',
+        )
         m_split = T.Keyword, split_words, True
         tidx, token = tlist.token_next_by(m=m_split, idx=idx)
 
@@ -109,6 +130,7 @@ class ReindentFilter:
         with indent(self):
             self._process_default(tlist)
 
+    @pysnooper.snoop()
     def _process_parenthesis(self, tlist):
         ttypes = T.Keyword.DML, T.Keyword.DDL
         _, is_dml_dll = tlist.token_next_by(t=ttypes)
@@ -144,34 +166,32 @@ class ReindentFilter:
                         adjust = 0
                         if self.comma_first:
                             adjust = -2
-                            _, comma = tlist.token_prev(
-                                tlist.token_index(token))
+                            _, comma = tlist.token_prev(tlist.token_index(token))
                             if comma is None:
                                 continue
                             token = comma
                         tlist.insert_before(token, self.nl(offset=adjust))
                         if self.comma_first:
                             _, ws = tlist.token_next(
-                                tlist.token_index(token), skip_ws=False)
-                            if (ws is not None
-                                    and ws.ttype is not T.Text.Whitespace):
-                                tlist.insert_after(
-                                    token, sql.Token(T.Whitespace, ' '))
+                                tlist.token_index(token), skip_ws=False
+                            )
+                            if ws is not None and ws.ttype is not T.Text.Whitespace:
+                                tlist.insert_after(token, sql.Token(T.Whitespace, ' '))
                         position = 0
         else:
             # ensure whitespace
             for token in tlist:
-                _, next_ws = tlist.token_next(
-                    tlist.token_index(token), skip_ws=False)
+                _, next_ws = tlist.token_next(tlist.token_index(token), skip_ws=False)
                 if token.value == ',' and not next_ws.is_whitespace:
-                    tlist.insert_after(
-                        token, sql.Token(T.Whitespace, ' '))
+                    tlist.insert_after(token, sql.Token(T.Whitespace, ' '))
 
             end_at = self.offset + sum(len(i.value) + 1 for i in identifiers)
             adjusted_offset = 0
-            if (self.wrap_after > 0
-                    and end_at > (self.wrap_after - self.offset)
-                    and self._last_func):
+            if (
+                self.wrap_after > 0
+                and end_at > (self.wrap_after - self.offset)
+                and self._last_func
+            ):
                 adjusted_offset = -len(self._last_func.value) - 1
 
             with offset(self, adjusted_offset), indent(self):
@@ -181,8 +201,9 @@ class ReindentFilter:
                 for token in identifiers:
                     # Add 1 for the "," separator
                     position += len(token.value) + 1
-                    if (self.wrap_after > 0
-                            and position > (self.wrap_after - self.offset)):
+                    if self.wrap_after > 0 and position > (
+                        self.wrap_after - self.offset
+                    ):
                         adjust = 0
                         tlist.insert_before(token, self.nl(offset=adjust))
                         position = 0
@@ -212,16 +233,14 @@ class ReindentFilter:
         tidx, token = tlist.token_next_by(i=sql.Parenthesis)
         first_token = token
         while token:
-            ptidx, ptoken = tlist.token_next_by(m=(T.Punctuation, ','),
-                                                idx=tidx)
+            ptidx, ptoken = tlist.token_next_by(m=(T.Punctuation, ','), idx=tidx)
             if ptoken:
                 if self.comma_first:
                     adjust = -2
                     offset = self._get_offset(first_token) + adjust
                     tlist.insert_before(ptoken, self.nl(offset))
                 else:
-                    tlist.insert_after(ptoken,
-                                       self.nl(self._get_offset(token)))
+                    tlist.insert_after(ptoken, self.nl(self._get_offset(token)))
             tidx, token = tlist.token_next_by(i=sql.Parenthesis, idx=tidx)
 
     def _process_default(self, tlist, stmts=True):

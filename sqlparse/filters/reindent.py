@@ -140,11 +140,16 @@ class ReindentFilter:
             return
 
         with indent(self, 1 if is_dml_dll else 0):
-            tlist.tokens.insert(0, self.nl()) if is_dml_dll else None
+            tlist.tokens.insert(fidx, self.nl()) if is_dml_dll else None
             # 0 is whitespace, 1 is parenthsis itself, 2 is the DDL token
-            tlist.tokens.insert(2, self.nl(self.width)) if is_dml_dll else None
-            with offset(self, self._get_offset(first) + 1):
+            tlist.tokens.insert(fidx + 2, self.nl(self.width)) if is_dml_dll else None
+            with offset(self, self._get_offset(first) + 4):
                 self._process_default(tlist, not is_dml_dll)
+
+        lidx, last = tlist.token_next_by(m=sql.Parenthesis.M_CLOSE)
+
+        with indent(self, 1 if is_dml_dll else 0):
+            tlist.tokens.insert(lidx, self.nl()) if is_dml_dll else None
 
     def _process_function(self, tlist):
         self._last_func = tlist[0]

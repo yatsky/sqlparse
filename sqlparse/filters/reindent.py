@@ -178,13 +178,16 @@ class ReindentFilter:
                     if position > (self.wrap_after - self.offset):
                         adjust = 0
                         if self.comma_first:
-                            adjust = -2
+                            adjust = -(self.width)
                             _, comma = tlist.token_prev(tlist.token_index(token))
                             if comma is None:
-                                tlist.insert_before(token, self.nl(offset=adjust + 2))
+                                # token does not follow a comma
+                                tlist.insert_before(token, self.nl(offset=adjust + 1))
                                 continue
+                            # token follows a comma
+                            # replace token variable with comma
                             token = comma
-                        tlist.insert_before(token, self.nl(offset=adjust))
+                        tlist.insert_before(token, self.nl(offset=adjust + 1))
                         if self.comma_first:
                             _, ws = tlist.token_next(
                                 tlist.token_index(token), skip_ws=False
